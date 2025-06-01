@@ -1,0 +1,55 @@
+<!-- 
+ 
+
+TU DOIS LANCER LE SERVER VIA : node server.js
+PUIS AVEC L'EXTENSION VSCODE (LIVE SERVER) LANCE LE FICHIER HTML
+
+J'AI PAS COMPRIS COMMENT RAJOUTER LES INFO DES USER DANS LA BDD DUCOUP VOILA
+-->
+
+
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Test WebSocket Client</title>
+</head>
+<body>
+  <h1>WebSocket Lobby Test</h1>
+
+  <button onclick="sendToken()">Check Token</button>
+  <button onclick="createLobby()">Create Lobby</button>
+  <button onclick="enterMatchmaking()">Enter Matchmaking</button>
+
+  <pre id="log"></pre>
+
+  <script>
+    const ws = new WebSocket("ws://localhost:8090");
+    const log = document.getElementById("log");
+
+    ws.onopen = () => logMessage("✅ Connecté au serveur WebSocket");
+    ws.onmessage = (event) => logMessage("📩 " + event.data);
+    ws.onerror = (err) => logMessage("❌ Erreur : " + err.message);
+    ws.onclose = () => logMessage("🔌 Connexion fermée");
+
+    function logMessage(msg) {
+      log.textContent += msg + "\n";
+      console.log(msg);
+    }
+
+    function sendToken() {
+      // Remplace ce token par un token réel présent dans ta base
+      ws.send("CheckToken 123e4567-e89b-12d3-a456-426614174000");
+    }
+
+    function createLobby() {
+      ws.send("CreateLobby");
+    }
+
+    function enterMatchmaking() {
+      ws.send("EnterMatchmaking");
+    }
+  </script>
+</body>
+</html>
