@@ -4,3 +4,4 @@ CREATE TABLE users (
     token TEXT NOT NULL,         -- JWT
     difficulties TEXT            -- JSON string or comma-separated values
 );
+
