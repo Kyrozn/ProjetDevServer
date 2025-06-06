@@ -1,6 +1,7 @@
 const WebSocketServer = require("ws").WebSocketServer;
 const sqlite3 = require("sqlite3").verbose();
 const { execSync } = require("child_process");
+const bcrypt = require("bcrypt"); // Make sure bcrypt is required at the top of your file
 let getPort;
 import("get-port")
   .then((module) => {
@@ -41,6 +42,7 @@ function createLobby(lobbyId, id) {
       gameState: createGameServer(lobbyId),
       players: new Set([id]),
     };
+    if (lobbies[lobbyId].gameState === null) return false; 
     return true;
   }
   return false;
@@ -87,7 +89,7 @@ async function createGameServer(lobbyId) {
   const containerName = `unity_server_${lobbyId}`;
   const unityImage = "my-unity-server:latest";
   const containerPort = 7777;
-
+/*
   try {
     execSync(
       `docker run -d --rm --name ${containerName} -p ${port}:${containerPort} ${unityImage} -batchmode -nographics -port ${containerPort}`,
@@ -97,7 +99,7 @@ async function createGameServer(lobbyId) {
     console.error("Erreur lors du lancement du conteneur Docker:", error);
     return null;
   }
-
+*/
   // Obtenir l’IP locale
   const interfaces = os.networkInterfaces();
   let ip = "127.0.0.1"; // fallback
@@ -147,6 +149,38 @@ function getUserFromToken(token, callback) {
   });
 }
 
+
+function getUserFromPassword(username, password, callback) {
+  db.get("SELECT * FROM users WHERE pseudo = ?", [username], (err, row) => {
+    if (err) {
+      callback({ success: false, error: err.message });
+    } else if (row) {
+      bcrypt.compare(password, row.token, (bcryptErr, result) => {
+        if (bcryptErr) {
+          callback({ success: false, error: bcryptErr.message });
+        } else if (result) {
+          const user = {
+            id: row.id,
+            pseudo: row.pseudo,
+            difficulties: JSON.parse(row.difficulties || "[]"),
+          };
+          callback({ success: true, user });
+        } else {
+          callback({
+            success: false,
+            error: "Mot de passe incorrect",
+          });
+        }
+      });
+    } else {
+      callback({
+        success: false,
+        error: "Utilisateur inexistant",
+      });
+    }
+  });
+}
+
 // Ajoute un joueur au matchmaking
 function enterMatchmaking(ws) {
   if (!isPlayerInAnyLobby(ws.userId)) {
@@ -185,7 +219,24 @@ wss.on("connection", function connection(ws) {
   ws.on("message", function incoming(message) {
     const msg = message.toString();
     console.log("Reçu : %s", msg);
-
+    if (msg.startsWith("Connection")) {
+      const parts = msg.split(" ");
+      const username = parts[1];
+      const password = parts[2];
+      getUserFromPassword(username, password, (result) => {
+        if (result.success) {
+          const user = result.user;
+          ws.userId = user.id;
+          ws.pseudo = user.pseudo;
+          ws.difficulties = user.difficulties;
+          ws.send("TokenValide " + user.pseudo);
+          ws.send("GetAccount " + user.id + " " + user.pseudo + " " + user.difficulties);
+        } else {
+          ws.send("Erreur: " + result.error);
+        }
+      });
+      return;
+    }
     // CheckToken <token>
     if (msg.startsWith("CheckToken")) {
       const parts = msg.split(" ");
@@ -198,6 +249,7 @@ wss.on("connection", function connection(ws) {
           ws.pseudo = user.pseudo;
           ws.difficulties = user.difficulties;
           ws.send("TokenValide " + user.pseudo);
+          ws.send("GetAccount " + user.id + " " + user.pseudo + " " + user.difficulties);
         } else {
           ws.send("Erreur: " + result.error);
         }
@@ -208,11 +260,18 @@ wss.on("connection", function connection(ws) {
     // CreateLobby
     else if (msg.startsWith("CreateLobby")) {
       const lobbyId = generateLobbyId();
-      if (createLobby(lobbyId, "123e4567-e89b-12d3-a456-426614174000")) {
+      const parts = msg.split(" ");
+      const token = parts[1];
+      if (createLobby(lobbyId, token)) {
         ws.send("LobbyCreated " + lobbyId);
       } else {
         ws.send("LobbyCreationFailed");
       }
+      return;
+    } else if (msg.startsWith("JoinLobby")) {
+      const parts = msg.split(' ');
+      const id = parts[1];
+      
       return;
     }
 
@@ -224,15 +283,14 @@ wss.on("connection", function connection(ws) {
         enterMatchmaking(ws);
       }
       return;
-    } 
-    else if (msg.startsWith("DestroyContainer")) {
+    } else if (msg.startsWith("DestroyContainer")) {
       if (!ws.userId) {
         ws.send("Erreur: Vous devez être connecté avec un token valide.");
       } else {
         stopGameServer(ws.userId);
       }
       return;
-    }
+    } 
 
     // Réponse générique
     ws.send("Message reçu : " + msg);
