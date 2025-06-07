@@ -133,7 +133,7 @@ function generateLobbyId() {
 
 // Récupère un utilisateur à partir de son token
 function getUserFromToken(token, callback) {
-  db.get("SELECT * FROM users WHERE token = ?", [token], (err, row) => {
+  db.get("SELECT * FROM users WHERE id = ?", [token], (err, row) => {
     if (err) {
       callback({ success: false, error: err.message });
     } else if (row) {
@@ -260,23 +260,43 @@ wss.on("connection", function connection(ws) {
     // CreateLobby
     else if (msg.startsWith("CreateLobby")) {
       const lobbyId = generateLobbyId();
-      const parts = msg.split(" ");
-      const token = parts[1];
-      if (createLobby(lobbyId, token)) {
-        ws.send("LobbyCreated " + lobbyId);
+      if (!ws.userId) {
+        ws.send("Erreur: Vous devez être connecté avec un token valide.");
       } else {
-        ws.send("LobbyCreationFailed");
+        if (createLobby(lobbyId, ws.userId)) {
+          ws.send("LobbyCreated " + lobbyId);
+        } else {
+          ws.send("LobbyCreationFailed");
+        }
       }
       return;
     } else if (msg.startsWith("JoinLobby")) {
-      const parts = msg.split(' ');
+      const parts = msg.split(" ");
       const id = parts[1];
-      
+      if (!ws.userId) {
+        ws.send("Erreur: Vous devez être connecté avec un token valide.");
+      } else {
+        if (lobbies[id].players.length < lobbies[id].gameState.maxPlayers) {
+          if(isPlayerInAnyLobby(ws.userId)) {
+            lobbies[GetLobbyofPlayer(ws.userId)].players.delete(ws.userId);
+          }
+          ws.send("LobbyJoin " + id);
+        } else {
+          ws.send("LobbyCreationFailed");
+        }
+      }
       return;
     }
 
     // EnterMatchmaking
-    else if (msg.startsWith("EnterMatchmaking")) {
+    else if (msg.startsWith("StartGame")) {
+      if (!ws.userId) {
+        ws.send("Erreur: Vous devez être connecté avec un token valide.");
+      } else {
+        enterMatchmaking(ws);
+      }
+      return;
+    } else if (msg.startsWith("EnterMatchmaking")) {
       if (!ws.userId) {
         ws.send("Erreur: Vous devez être connecté avec un token valide.");
       } else {
