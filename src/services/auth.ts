@@ -21,7 +21,7 @@ export function getUserFromPassword(
   password: string
 ): Promise<User | null> {
   return new Promise((resolve, reject) => {
-    db.get("SELECT * FROM users WHERE pseudo = ?", [username], (err, result: {token: string, id: string, pseudo: string, difficulties: string}) => {
+    db.get("SELECT * FROM users WHERE pseudo = ?", [username], async (err, result: {token: string, id: string, pseudo: string, difficulties: string}) => {
       if (err) return reject(err);
       if (!result) return resolve(null);
       bcrypt.compare(password, result.token, (bcryptErr, resultbool) => {

@@ -9,4 +9,4 @@ UPDATE users
 SET pseudo = 'new_pseudo', token = 'new_token'
 WHERE id = 'user-uuid-1234';
 
-$2y$10$RUJDaqAecsBRnXng.4K0R.u/vDJk18J2PrXCHPI8o.m6EJkiQ9jTW -- password123
+$2b$10$b2nRAoC3xXforhOMWLmeGeyaA6eUdMRyGzhTCa0C.hdvaOxU1FbbO -- password123

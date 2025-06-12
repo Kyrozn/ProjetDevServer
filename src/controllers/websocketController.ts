@@ -8,28 +8,33 @@ import {
   getLobbyOfPlayer,
   stopGameServer,
   enterMatchmaking,
+  leftMatchmaking,
 } from "../services/matchmaking.js";
 import { generateLobbyId } from "../utils/helpers.js";
+import { players } from '../models/types.js';
 
-interface CustomWebSocket extends WebSocket {
+export interface CustomWebSocket extends WebSocket {
   userId?: string; // ou string, selon ce que tu utilises
   pseudo?: string;
   difficulties?: any; // précise le type si tu peux
 }
 
-export async function handleMessage(ws: CustomWebSocket, message: string) {
+export async function handleMessage(ws: WebSocket, message: string) {
+  const cws = ws as CustomWebSocket;
   const msg = message.toString();
   if (msg.startsWith("Connection")) {
     const [, username, password] = msg.split(" ");
+    console.log("Hello");
     try {
       const user = await getUserFromPassword(username, password);
       if (!user) {
         ws.send("Erreur: Utilisateur ou mot de passe incorrect");
+        console.log("Erreur: Utilisateur ou mot de passe incorrect");
         return;
       }
-      ws["userId"] = user.id;
-      ws["pseudo"] = user.pseudo;
-      ws["difficulties"] = user.difficulties;
+      cws.userId = user.id;
+      cws.pseudo = user.pseudo;
+      cws.difficulties = user.difficulties;
       ws.send("TokenValide " + user.pseudo);
       ws.send(
         "GetAccount " +
@@ -50,9 +55,9 @@ export async function handleMessage(ws: CustomWebSocket, message: string) {
         ws.send("Erreur: Token invalide");
         return;
       }
-      ws["userId"] = user.id;
-      ws["pseudo"] = user.pseudo;
-      ws["difficulties"] = user.difficulties;
+      cws.userId = user.id;
+      cws.pseudo = user.pseudo;
+      cws.difficulties = user.difficulties;
       ws.send("TokenValide " + user.pseudo);
       ws.send(
         "GetAccount " +
@@ -66,19 +71,19 @@ export async function handleMessage(ws: CustomWebSocket, message: string) {
       ws.send("Erreur: " + (err as Error).message);
     }
   } else if (msg.startsWith("CreateLobby")) {
-    if (!ws["userId"]) {
+    if (!cws.userId) {
       ws.send("Erreur: Vous devez être connecté.");
       return;
     }
     const lobbyId = generateLobbyId();
-    if (await createLobby(lobbyId, ws["userId"])) {
-      ws.send("LobbyCreated " + lobbyId);
+    if (await createLobby(lobbyId, cws.userId)) {
+      ws.send("LobbyCreated " + lobbyId + " " + lobbies[lobbyId].gameState?.url);
     } else {
       ws.send("LobbyCreationFailed");
     }
   } else if (msg.startsWith("JoinLobby")) {
     const [, id] = msg.split(" ");
-    if (!ws["userId"]) {
+    if (!cws.userId) {
       ws.send("Erreur: Vous devez être connecté.");
       return;
     }
@@ -91,33 +96,68 @@ export async function handleMessage(ws: CustomWebSocket, message: string) {
       ws.send("LobbyFull");
       return;
     }
-    if (isPlayerInAnyLobby(ws["userId"])) {
-      const oldLobbyId = getLobbyOfPlayer(ws["userId"]);
+    if (isPlayerInAnyLobby(cws.userId)) {
+      const oldLobbyId = getLobbyOfPlayer(cws.userId);
       if (oldLobbyId && lobbies[oldLobbyId]) {
-        lobbies[oldLobbyId].players.delete(ws["userId"]);
+        // Find the player object by userId and delete it from the set
+        const playerToDelete = Array.from(lobbies[oldLobbyId].players).find((p: players) => p.id === cws.userId);
+        if (playerToDelete) {
+          lobbies[oldLobbyId].players.delete(playerToDelete);
+        }
       }
     }
-    lobby.players.add(ws["userId"]);
+    // You may need to provide a characterchoiced value here, e.g. null or from the message
+    lobby.players.add({
+      id: cws.userId,
+      characterchoiced: "Luffy",
+      ws: ws,
+    });
     ws.send("LobbyJoin " + id);
-  } else if (
-    msg.startsWith("EnterMatchmaking") ||
-    msg.startsWith("StartGame")
-  ) {
-    if (!ws["userId"]) {
+  } else if (msg.startsWith("EnterMatchmaking")) {
+    if (!cws.userId) {
       ws.send("Erreur: Vous devez être connecté.");
       return;
     }
-    enterMatchmaking(ws);
+    var characterchoice = msg.split(" ")[1];
+    enterMatchmaking(ws, characterchoice);
+  } else if (msg.startsWith("LeftMatchmaking")) {
+    if (!cws.userId) {
+      ws.send("Erreur: Vous devez être connecté.");
+      return;
+    }
+    leftMatchmaking(cws);
   } else if (msg.startsWith("DestroyContainer")) {
-    if (!ws["userId"]) {
+    if (!cws.userId) {
       ws.send("Erreur: Vous devez être connecté.");
       return;
     }
-    const lobbyId = getLobbyOfPlayer(ws["userId"]);
+    const lobbyId = getLobbyOfPlayer(cws.userId);
     if (lobbyId) {
       stopGameServer(lobbyId);
     }
-  } else {
+  } else if (msg.startsWith("StartGame")) {
+    if (!cws.userId) {
+      ws.send("Erreur: Vous devez être connecté.");
+      return;
+    }
+    const lobbyId = getLobbyOfPlayer(cws.userId);
+    if (lobbyId) {
+
+    } 
+  } else if (msg.startsWith("ChangeCharacter")) {
+      if (!cws.userId) {
+        ws.send("Erreur: Vous devez être connecté.");
+        return;
+      }
+      const lobbyId = getLobbyOfPlayer(cws.userId);
+      if (lobbyId) {
+        const player = Array.from(lobbies[lobbyId].players).find((p: players) => p.id === cws.userId);
+        if (player) {
+          const [, newCharacter] = msg.split(" ");
+          player.characterchoiced = newCharacter;
+        }
+      }
+    } else {
     ws.send("Message reçu : " + msg);
   }
 }

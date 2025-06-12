@@ -1,3 +1,5 @@
+import { CustomWebSocket } from "../controllers/websocketController";
+
 export interface User {
   id: string;
   pseudo: string;
@@ -6,7 +8,7 @@ export interface User {
 
 export interface Lobby {
   gameState: GameState | null;
-  players: Set<string>;
+  players: Set<players>;
 }
 
 export interface GameState {
@@ -15,4 +17,9 @@ export interface GameState {
   maxPlayers: number;
   url: string;
   containerName: string;
+}
+export interface players {
+  id: string;
+  characterchoiced: string;
+  ws: CustomWebSocket;
 }

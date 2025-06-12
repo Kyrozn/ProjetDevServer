@@ -1,0 +1,22 @@
+FROM alpine:latest
+
+# Install required libraries for Unity headless build
+RUN apk add --no-cache libstdc++ bash libc6-compat
+
+# Crée un répertoire pour ton jeu
+WORKDIR /app
+
+# Copie le build Unity headless
+COPY GameServerBuild/ /app/
+
+# Rends le binaire exécutable
+RUN chmod +x /app/dev.x86_64
+
+# Ajoute un argument d'environnement pour le port
+ENV GAME_PORT=7777
+
+# Expose le port (utilisé dynamiquement à l'exécution)
+EXPOSE ${GAME_PORT}
+
+# Commande de démarrage : Unity headless
+CMD ["sh", "-c", "./dev.x86_64 -batchmode -nographics -port $GAME_PORT"]
