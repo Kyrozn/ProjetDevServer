@@ -4,6 +4,8 @@ import os from "os";
 import getPort from "get-port";
 import { generateLobbyId } from "../utils/helpers.js";
 import { CustomWebSocket } from "../controllers/websocketController";
+import db from "../database/db.js";
+import { randomUUID } from "crypto";
 
 export const lobbies: Record<string, Lobby> = {};
 export const playersInMatchmaking: {
@@ -48,9 +50,9 @@ export async function createGameServer(
       }
     }
         const cmd = `docker run -d --name ${containerName} \
-      -e GAME_PORT=${port} \
-      -p ${port}:${port} \
-      unity-headless-server`;
+      -e GAME_PORT=7777 \
+      -p ${port}:7777/udp \
+      unity-headless-server3`;
 
         execSync(cmd, { stdio: "inherit" });
     return {
@@ -68,20 +70,22 @@ export async function createGameServer(
 
 export async function createLobby(
   lobbyId: string,
-  playerId: string
+  playerId: string,
+  isPerstistent: boolean
 ): Promise<boolean> {
   if (lobbies[lobbyId] || isPlayerInAnyLobby(playerId)) return false;
   const gameState = await createGameServer(lobbyId);
   if (!gameState) return false;
-  lobbies[lobbyId] = { gameState, players: new Set<players>() };
+  lobbies[lobbyId] = { gameState, players: new Set<players>(), isPerstistent };
   return true;
 }
 
 export function stopGameServer(lobbyId: string) {
   try {
-    execSync(`docker stop ${lobbyId}`, { stdio: "ignore" });
-    execSync(`docker rm ${lobbyId}`, { stdio: "ignore" });
-    console.log(`Conteneur ${lobbyId} stoppé et supprimé.`);
+    var container = lobbies[lobbyId].gameState?.containerName
+    execSync(`docker stop ${container}`, { stdio: "ignore" });
+    execSync(`docker rm ${container}`, { stdio: "ignore" });
+    console.log(`Conteneur ${container} stoppé et supprimé.`);
   } catch (err) {
     console.error("Erreur arrêt conteneur:", err);
   }
@@ -117,7 +121,7 @@ async function tryToCreateLobby() {
     if (playersInMatchmaking.length >= 2) {
       const [p1, p2] = playersInMatchmaking.splice(0, 2);
       const lobbyId = generateLobbyId();
-      if(await createLobby(lobbyId, p1.userId)) {
+      if(await createLobby(lobbyId, p1.userId, false)) {
   
       // lobbies[lobbyId].clients.add(p1.socket);
       // lobbies[lobbyId].clients.add(p2.socket);
@@ -138,3 +142,70 @@ async function tryToCreateLobby() {
     }
     }
   }
+  export function updateHistoric(lobbyId: string, isWin: string) {
+    var playersid: string[] = [];
+    lobbies[lobbyId].players.forEach((player) => {playersid.push(player.id)});
+
+      db.run(
+        `INSERT INTO historic (id, player1_id, player2_id, isWin, Player1_char, Player2_char, game_date) VALUES 
+        (?, ?, ?, ?, ?, ?, ?);`,
+        [
+          randomUUID(),
+          playersid[0],
+          playersid.length > 1 ? playersid[1] : "",
+          isWin,
+          Array.from(lobbies[lobbyId].players)[0]?.characterchoiced,
+          playersid.length > 1
+            ? Array.from(lobbies[lobbyId].players)[1]?.characterchoiced
+            : "",
+          Date.now()
+        ]
+      );
+  }
+  export function updateRank(lobbyId: string, isWin: string) {
+    lobbies[lobbyId].players.forEach((player) => {
+      db.get(
+        `Select Elo from users where id = ?`, 
+        [player.id], 
+        (err, result: { Elo: number }) => {
+          if (err || !result) return;
+          db.run(
+            `Update users SET Elo = ? where id = ?;`,
+            [isWin === "true"? result.Elo + 100 : result.Elo - 100, player.id],
+          );
+        }
+      );
+    });
+  }
+//   db.get(
+//     `INSERT INTO historic (id, player1_id, player2_id, isWin, Player1_char, Player2_char, game_date) VALUES 
+//     (?, ?, ?, ?, ?, ?, ?);`[randomUUID, player.id, ],
+//     async (
+//       err,
+//       result: {
+//         token: string;
+//         id: string;
+//         pseudo: string;
+//         difficulties: string;
+//       }
+//     ) => {
+//       if (err) return reject(err);
+//       if (!result) return resolve(null);
+//       bcrypt.compare(password, result.token, (bcryptErr, resultbool) => {
+//         if (bcryptErr) return reject(bcryptErr);
+//         if (resultbool) {
+//           resolve({
+//             id: result.id,
+//             pseudo: result.pseudo,
+//             difficulties: JSON.parse(result.difficulties || "[]"),
+//           });
+//         } else {
+//           resolve(null);
+//         }
+//       });
+//     }
+//   );
+  
+  
+//   player.id
+// });

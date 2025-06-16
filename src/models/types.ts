@@ -3,12 +3,13 @@ import { CustomWebSocket } from "../controllers/websocketController";
 export interface User {
   id: string;
   pseudo: string;
-  difficulties: string[];
+  Elo: number;
 }
 
 export interface Lobby {
   gameState: GameState | null;
   players: Set<players>;
+  isPerstistent: boolean;
 }
 
 export interface GameState {
