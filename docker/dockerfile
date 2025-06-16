@@ -1,22 +1,30 @@
-FROM alpine:latest
+FROM debian:bullseye-slim
 
-# Install required libraries for Unity headless build
-RUN apk add --no-cache libstdc++ bash libc6-compat
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    libstdc++6 \
+    libc6 \
+    libgcc-s1 \
+    libx11-6 \
+    libglu1 \
+    libpulse0 \
+    libasound2 \
+    libxcursor1 \
+    libxi6 \
+    libxrandr2 \
+    libxss1 \
+    libxtst6 \
+    libxxf86vm1 \
+    bash \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Crée un répertoire pour ton jeu
 WORKDIR /app
+COPY ./GameServerBuild/ /app/
+RUN chmod +x /app/buildServer.x86_64
 
-# Copie le build Unity headless
-COPY GameServerBuild/ /app/
-
-# Rends le binaire exécutable
-RUN chmod +x /app/dev.x86_64
-
-# Ajoute un argument d'environnement pour le port
 ENV GAME_PORT=7777
-
-# Expose le port (utilisé dynamiquement à l'exécution)
+ENV XDG_RUNTIME_DIR=/tmp
 EXPOSE ${GAME_PORT}
 
-# Commande de démarrage : Unity headless
-CMD ["sh", "-c", "./dev.x86_64 -batchmode -nographics -port $GAME_PORT"]
+CMD ["sh", "-c", "./buildServer.x86_64 -batchmode -nographics -port $GAME_PORT"]
