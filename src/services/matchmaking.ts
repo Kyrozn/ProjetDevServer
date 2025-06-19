@@ -52,7 +52,7 @@ export async function createGameServer(
         const cmd = `docker run -d --name ${containerName} \
       -e GAME_PORT=7777 \
       -p ${port}:7777/udp \
-      unity-headless-server3`;
+      unity-headless-server`;
 
         execSync(cmd, { stdio: "inherit" });
     return {
